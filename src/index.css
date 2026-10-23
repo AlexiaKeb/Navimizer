@@ -1,6 +1,10 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import 'tailwindcss';
+
+/* Tailwind 4 : conserver les valeurs par défaut de Tailwind 3 (bordures grises, curseur des boutons) */
+@layer base {
+  *, ::after, ::before, ::backdrop, ::file-selector-button { border-color: var(--color-gray-200); }
+  button:not(:disabled), [role='button']:not(:disabled) { cursor: pointer; }
+}
 
 html, body, #root { height: 100%; }
 body { font-family: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; }
