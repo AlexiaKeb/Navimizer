@@ -4,6 +4,7 @@ import toast from 'react-hot-toast';
 import { extractAddresses, ImportError } from '../lib/importAddresses';
 import { useEscape } from '../lib/useEscape';
 import { useRouteStore } from '../store/routeStore';
+import { maxPointsFor, usePlanStore } from '../store/planStore';
 
 interface Item {
   id: number;
@@ -15,7 +16,9 @@ interface Item {
 export function PasteImport({ onClose }: { onClose: () => void }) {
   useEscape(onClose);
   const addStops = useRouteStore((s) => s.addStops);
-  const room = useRouteStore((s) => 100 - s.stops.length);
+  const isPro = usePlanStore((s) => s.isPro);
+  const openUpgrade = usePlanStore((s) => s.openUpgrade);
+  const room = useRouteStore((s) => maxPointsFor(isPro) - s.stops.length);
   const fileInput = useRef<HTMLInputElement>(null);
   const [text, setText] = useState('');
   const [image, setImage] = useState<File | null>(null);
@@ -26,7 +29,7 @@ export function PasteImport({ onClose }: { onClose: () => void }) {
   const run = async () => {
     setBusy(true);
     try {
-      const res = await extractAddresses({ text, image: image ?? undefined });
+      const res = await extractAddresses({ text, image: image ?? undefined, allowAi: isPro });
       if (res.addresses.length === 0) {
         toast.error('Aucune adresse trouvée dans ce contenu.');
         return;
@@ -34,6 +37,11 @@ export function PasteImport({ onClose }: { onClose: () => void }) {
       setSource(res.source);
       setItems(res.addresses.map((a, i) => ({ id: i, text: a, checked: true })));
     } catch (e) {
+      if (e instanceof ImportError && e.code === 'pro_required') {
+        onClose();
+        openUpgrade('ai');
+        return;
+      }
       toast.error(e instanceof ImportError ? e.message : "L'analyse a échoué");
     } finally {
       setBusy(false);
@@ -101,6 +109,7 @@ export function PasteImport({ onClose }: { onClose: () => void }) {
             <p className="text-sm text-gray-600">
               {items.length} adresse{items.length > 1 ? 's' : ''} trouvée{items.length > 1 ? 's' : ''}
               {source === 'ai' ? ' par l\'analyse intelligente' : ' (lecture simple du texte)'}. Corrigez ou décochez avant d'ajouter.
+              {source === 'local' && !isPro && <> <button onClick={() => { onClose(); openUpgrade('ai'); }} className="text-blue-600 underline">Passez Pro</button> pour l'analyse intelligente.</>}
             </p>
             <ul className="min-h-0 flex-1 space-y-1.5 overflow-y-auto">
               {items.map((it) => (
@@ -112,7 +121,7 @@ export function PasteImport({ onClose }: { onClose: () => void }) {
                 </li>
               ))}
             </ul>
-            {selected.length > room && <p className="text-xs text-red-600">Trop d'adresses : il reste de la place pour {room} arrêt(s).</p>}
+            {selected.length > room && <p className="text-xs text-red-600">Trop d'adresses : il reste de la place pour {room} arrêt(s){!isPro && ' (plan gratuit)'}.</p>}
             <div className="flex gap-2">
               <button onClick={() => setItems(null)} className="rounded-lg border border-gray-300 px-4 py-2.5 text-sm hover:bg-gray-50">Retour</button>
               <button onClick={confirm} disabled={selected.length === 0 || selected.length > room}

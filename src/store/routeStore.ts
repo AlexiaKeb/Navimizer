@@ -1,12 +1,13 @@
 import { create } from 'zustand';
 import { arrayMove } from '@dnd-kit/sortable';
 import toast from 'react-hot-toast';
-import { MAX_POINTS, type Mode, type Optimization, type Place, type RouteResult, type StopRow, type Visit } from '../types';
+import { type Mode, type Optimization, type Place, type RouteResult, type StopRow, type Visit } from '../types';
 import { ensureCoords, GeocodeError } from '../lib/geocode';
 import { OptimizeError, requestRoute } from '../lib/routing';
 import { clearForm, loadForm, saveForm } from '../lib/formStorage';
 import { nextQuarter } from '../lib/schedule';
 import { computeSavings, type Savings } from '../lib/savings';
+import { currentMaxPoints, usePlanStore } from './planStore';
 
 interface ComputeOptions {
   /** false : garder l'ordre de la liste et recalculer uniquement le tracé. */
@@ -59,6 +60,12 @@ const newRow = (p: Place = { label: '' }): StopRow => ({
   status: p.lat !== undefined ? 'ok' : 'idle',
 });
 const blankList = () => [newRow(), newRow()];
+
+/** Limite atteinte : un utilisateur gratuit voit les tarifs, un abonné un simple message. */
+const limitReached = (limit: number) => {
+  if (!usePlanStore.getState().isPro) usePlanStore.getState().openUpgrade('limit');
+  else toast.error(`Le nombre maximum de points est de ${limit}`);
+};
 
 const restored = loadForm();
 let requestId = 0;
@@ -141,17 +148,16 @@ export const useRouteStore = create<RouteState>((set, get) => {
       })),
 
     addStop: (p) => {
-      if (get().stops.length >= MAX_POINTS) {
-        toast.error(`Le nombre maximum de points est de ${MAX_POINTS}`);
-        return;
-      }
+      const limit = currentMaxPoints();
+      if (get().stops.length >= limit) return limitReached(limit);
       // Les nouveaux arrêts s'insèrent avant l'arrivée
       set((s) => ({ stale: true, stops: [...s.stops.slice(0, -1), newRow(p), s.stops[s.stops.length - 1]] }));
     },
 
     addStops: (labels) => {
-      if (get().stops.length + labels.length > MAX_POINTS) {
-        toast.error(`Le nombre maximum de points est de ${MAX_POINTS}`);
+      const limit = currentMaxPoints();
+      if (get().stops.length + labels.length > limit) {
+        limitReached(limit);
         return 0;
       }
       set((s) => ({ stale: true, stops: [...s.stops.slice(0, -1), ...labels.map((label) => newRow({ label })), s.stops[s.stops.length - 1]] }));
@@ -212,6 +218,7 @@ export const useRouteStore = create<RouteState>((set, get) => {
         toast.error('Veuillez saisir une origine et une destination');
         return;
       }
+      if (filledCount() > currentMaxPoints()) return limitReached(currentMaxPoints());
       const id = ++requestId;
       set({ loading: true });
       try {
@@ -249,6 +256,7 @@ export const useRouteStore = create<RouteState>((set, get) => {
       } catch (e) {
         if (id !== requestId) return;
         set({ loading: false });
+        if (e instanceof OptimizeError && e.code === 'plan_limit') return; // la fenêtre des tarifs est déjà ouverte
         toast.error(
           e instanceof OptimizeError && e.code === 'no_route'
             ? "Aucun itinéraire n'a été trouvé entre ces points."

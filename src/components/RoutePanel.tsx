@@ -8,6 +8,7 @@ import { formatDistance, formatDuration } from '../lib/format';
 import { buildSchedule, formatClock, parseClock } from '../lib/schedule';
 import { buildTour, createShareLink } from '../lib/share';
 import { MAX_POINTS, type Mode, type Optimization } from '../types';
+import { maxPointsFor, usePlanStore } from '../store/planStore';
 import { CsvImport } from './CsvImport';
 import { FavoritesModal } from './FavoritesModal';
 import { StopList } from './StopList';
@@ -30,6 +31,8 @@ const SERVICE_OPTIONS = [0, 2, 5, 10, 15, 20, 30, 45, 60];
 export function RoutePanel() {
   const s = useRouteStore();
   const user = useAuthStore((a) => a.user);
+  const isPro = usePlanStore((p) => p.isPro);
+  const openUpgrade = usePlanStore((p) => p.openUpgrade);
   const [favFor, setFavFor] = useState<'first' | 'last' | null>(null);
   const [saving, setSaving] = useState(false);
   const [routeName, setRouteName] = useState('');
@@ -66,6 +69,7 @@ export function RoutePanel() {
   };
 
   const share = async () => {
+    if (!isPro) return openUpgrade('share');
     if (!user || !s.result || s.stale) return toast.error("Optimisez d'abord la tournée pour la partager");
     setSharing(true);
     try {
@@ -109,14 +113,16 @@ export function RoutePanel() {
               <div className="rounded-lg bg-white p-2 shadow-sm"><div className="text-[11px] text-gray-500">Conduite</div><div className="text-sm font-semibold">{formatDuration(s.result.duration)}</div></div>
               <div className="rounded-lg bg-white p-2 shadow-sm"><div className="text-[11px] text-gray-500">Fin estimée</div><div className="text-sm font-semibold">{schedule ? formatClock(schedule.end) : '—'}</div></div>
             </div>
-            <button onClick={() => s.setDriver(true)} className="flex w-full items-center justify-center gap-2 rounded-lg bg-green-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-green-700">
+            <button onClick={() => (isPro ? s.setDriver(true) : openUpgrade('driver'))} className="flex w-full items-center justify-center gap-2 rounded-lg bg-green-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-green-700">
               <Navigation className="h-4 w-4" /> Démarrer la tournée (mode chauffeur)
+              {!isPro && <span className="rounded bg-white/25 px-1.5 py-0.5 text-[10px] font-bold">PRO</span>}
             </button>
             {user && (
               <div>
-                <button onClick={() => void share()} disabled={sharing || s.stale}
+                <button onClick={() => void share()} disabled={sharing || (isPro && s.stale)}
                   className="flex w-full items-center justify-center gap-2 rounded-lg border border-green-600 px-4 py-2.5 text-sm font-medium text-green-700 hover:bg-green-50 disabled:opacity-60">
                   {sharing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Share2 className="h-4 w-4" />} Partager la tournée (lien)
+                  {!isPro && <span className="rounded bg-green-100 px-1.5 py-0.5 text-[10px] font-bold text-green-800">PRO</span>}
                 </button>
                 <p className="mt-1 text-[11px] text-gray-500">Le chauffeur l'ouvre sans compte. Valable 30 jours : toute personne ayant le lien voit les adresses.</p>
               </div>
@@ -172,7 +178,7 @@ export function RoutePanel() {
         {/* Liste des arrêts */}
         <section className="space-y-2">
           <div className="flex items-center justify-between">
-            <h2 className="text-sm font-semibold text-gray-700">Arrêts <span className="font-normal text-gray-500">({s.stops.length}/{MAX_POINTS})</span></h2>
+            <h2 className="text-sm font-semibold text-gray-700">Arrêts <span className="font-normal text-gray-500">({s.stops.length}/{maxPointsFor(isPro)})</span></h2>
             <button type="button" onClick={s.swap} className="flex items-center gap-1 text-xs text-blue-600 hover:underline">
               <ArrowUpDown className="h-3.5 w-3.5" /> Inverser départ/arrivée
             </button>

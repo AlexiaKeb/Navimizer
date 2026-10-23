@@ -2,9 +2,10 @@ import { FunctionsHttpError } from '@supabase/supabase-js';
 import { MAX_IMAGE_B64, MAX_TEXT_CHARS, localParse, looksClean } from '../../supabase/functions/_shared/extract.ts';
 import { isBackendConfigured, supabase } from './supabase';
 
-export type ImportErrorCode = 'not_configured' | 'quota' | 'refused' | 'busy' | 'too_big' | 'not_image' | 'failed';
+export type ImportErrorCode = 'pro_required' | 'not_configured' | 'quota' | 'refused' | 'busy' | 'too_big' | 'not_image' | 'failed';
 
 const MESSAGES: Record<ImportErrorCode, string> = {
+  pro_required: "L'import intelligent (texte en vrac, photo) est réservé au plan Pro.",
   not_configured: "L'analyse intelligente n'est pas activée sur ce site.",
   quota: "Limite quotidienne d'analyses atteinte : réessayez demain ou collez une liste d'adresses (une par ligne).",
   refused: "L'analyse a été refusée pour ce contenu. Saisissez les adresses manuellement.",
@@ -53,6 +54,7 @@ async function callAi(body: { text?: string; image?: { mediaType: string; data: 
   if (error instanceof FunctionsHttpError) {
     const status = error.context.status;
     const payload = (await error.context.json().catch(() => null)) as { code?: ImportErrorCode } | null;
+    if (status === 402) throw new ImportError('pro_required');
     if (status === 404 || status === 501) throw new ImportError('not_configured');
     if (status === 429) throw new ImportError(payload?.code === 'quota' ? 'quota' : 'busy');
     if (status === 413) throw new ImportError('too_big');
@@ -62,16 +64,22 @@ async function callAi(body: { text?: string; image?: { mediaType: string; data: 
 }
 
 /**
- * Texte : si c'est déjà une liste propre, lecture locale (gratuit, instantané) ; sinon analyse par Claude,
- * avec repli sur la lecture locale si l'IA n'est pas disponible. Photo : analyse par Claude uniquement.
+ * Texte : si c'est déjà une liste propre, lecture locale (gratuit, instantané) ; sinon analyse par Claude (plan Pro),
+ * avec repli sur la lecture locale si l'IA n'est pas disponible. Photo : analyse par Claude uniquement (plan Pro).
  */
-export async function extractAddresses(input: { text?: string; image?: File }): Promise<ImportResult> {
+export async function extractAddresses(input: { text?: string; image?: File; allowAi: boolean }): Promise<ImportResult> {
   const text = input.text?.trim() ?? '';
   if (text.length > MAX_TEXT_CHARS) throw new ImportError('too_big');
 
   if (!input.image) {
     if (!text) return { addresses: [], source: 'local' };
     if (looksClean(text)) return { addresses: localParse(text), source: 'local' };
+    if (!input.allowAi) {
+      // Plan gratuit : lecture simple du texte ; s'il ne contient rien d'exploitable, l'analyse intelligente est proposée
+      const local = localParse(text);
+      if (local.length > 0) return { addresses: local, source: 'local' };
+      throw new ImportError('pro_required');
+    }
     try {
       return { addresses: await callAi({ text }), source: 'ai' };
     } catch (e) {
@@ -81,6 +89,7 @@ export async function extractAddresses(input: { text?: string; image?: File }): 
     }
   }
 
+  if (!input.allowAi) throw new ImportError('pro_required');
   const image = await prepareImage(input.image);
   return { addresses: await callAi({ text: text || undefined, image }), source: 'ai' };
 }

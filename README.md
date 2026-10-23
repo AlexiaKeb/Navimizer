@@ -43,15 +43,41 @@ Base de données : appliquer `supabase/migrations/001_routes.sql`. Désactiver l
 | `002_ai_quota.sql` | quota quotidien d'analyses IA par utilisateur |
 | `003_shared_routes.sql` | tournées partagées par lien (lecture publique uniquement via le jeton) |
 | `004_rls_initplan.sql` | optimisation des règles de sécurité (évaluation unique de `auth.uid()`) |
+| `005_billing.sql` | abonnements Stripe (`subscriptions`, fonction `is_pro()`), partage par lien réservé au plan Pro |
 
 ## Fonctions serveur (Supabase Edge Functions)
 
 | Fonction | Rôle | Secrets |
 |---|---|---|
 | `optimize` | ordre optimal d'une tournée | `OSRM_URL_CAR`, `OSRM_URL_BIKE`, `OSRM_URL_FOOT` (optionnels) |
+| `create-checkout` | ouvre le paiement Stripe (abonnement Pro) | `STRIPE_SECRET_KEY`, `STRIPE_PRICE_ID_PRO`, `SITE_URL` |
+| `customer-portal` | portail Stripe (carte, factures, résiliation) | `STRIPE_SECRET_KEY`, `SITE_URL` |
+| `stripe-webhook` | tient la table `subscriptions` à jour (déployée **sans** JWT, signature Stripe vérifiée) | `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET` |
 | `extract-addresses` | adresses depuis un texte en vrac ou une photo (Claude) | `ANTHROPIC_API_KEY` (obligatoire), `ANTHROPIC_MODEL` (défaut `claude-opus-5-5` ; `claude-haiku-5-5` pour réduire fortement le coût), `AI_DAILY_LIMIT` (défaut 30 par utilisateur et par jour) |
 
 Sans `ANTHROPIC_API_KEY`, l'import de texte reste utilisable (lecture simple) ; l'import par photo est désactivé.
+
+## Abonnements Stripe
+
+**Plans** (modifiables dans `supabase/functions/_shared/billing.ts` et `src/lib/plans.ts`) : Gratuit = 10 arrêts par tournée ;
+Pro = 100 arrêts, mode chauffeur, partage par lien, import intelligent. Les limites sont **appliquées côté serveur** (fonctions
+`optimize` et `extract-addresses`, règle de la base pour le partage) ; l'interface ne fait qu'expliquer.
+
+**Mise en place (commencer en mode test de Stripe)**
+1. Stripe → Produits : créer « Navimizer Pro » avec un prix récurrent mensuel ; noter l'identifiant du prix (`price_…`).
+2. Stripe → Paramètres → Portail de facturation : activer le portail client (changement de carte, factures, résiliation).
+3. Stripe → Développeurs → Webhooks : ajouter l'endpoint `https://<projet>.supabase.co/functions/v1/stripe-webhook` avec les
+   événements `checkout.session.completed`, `customer.subscription.created`, `customer.subscription.updated`,
+   `customer.subscription.deleted`, `invoice.paid`, `invoice.payment_failed` ; noter la clé de signature (`whsec_…`).
+4. Supabase → Edge Functions → Secrets : `STRIPE_SECRET_KEY` (`sk_test_…`), `STRIPE_WEBHOOK_SECRET`, `STRIPE_PRICE_ID_PRO`,
+   `SITE_URL` (adresse du site, sans `/` final).
+5. Variable du site (Render) : `VITE_PRO_PRICE_LABEL` = libellé affiché, identique au prix Stripe (ex. `19 € / mois`), puis redéployer.
+6. Tester avec la carte `4242 4242 4242 4242`, puis refaire les étapes 3 et 4 avec les clés de production (`sk_live_…`).
+
+**Donner le plan Pro à un compte sans paiement** (test, partenaire) :
+`insert into public.subscriptions (user_id, status) select id, 'active' from auth.users where email = 'adresse@exemple.fr' on conflict (user_id) do update set status = 'active';`
+
+**Avant de vendre** : mentions légales, CGV (droit de rétractation, résiliation), politique de confidentialité.
 
 ## Déploiement
 

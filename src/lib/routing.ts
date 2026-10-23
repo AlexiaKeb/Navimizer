@@ -1,6 +1,7 @@
 import { FunctionsHttpError } from '@supabase/supabase-js';
 import { optimizeRoute, OptimizeError, PUBLIC_SERVERS } from '../../supabase/functions/_shared/optimize.ts';
 import type { OptimizeRequest, RouteResult } from '../types';
+import { usePlanStore } from '../store/planStore';
 import { isBackendConfigured, supabase } from './supabase';
 
 export { OptimizeError };
@@ -14,6 +15,10 @@ export async function requestRoute(req: OptimizeRequest): Promise<RouteResult> {
   if (isBackendConfigured) {
     const { data, error } = await supabase.functions.invoke<RouteResult>('optimize', { body: req });
     if (!error && data) return data;
+    if (error instanceof FunctionsHttpError && error.context.status === 403) {
+      usePlanStore.getState().openUpgrade('limit'); // plan gratuit dépassé : la règle du serveur fait foi, pas de repli
+      throw new OptimizeError('plan_limit');
+    }
     if (error instanceof FunctionsHttpError && (error.context.status === 400 || error.context.status === 422)) {
       const body = (await error.context.json().catch(() => null)) as { code?: 'invalid' | 'no_route'; message?: string } | null;
       throw new OptimizeError(body?.code ?? 'invalid', body?.message);

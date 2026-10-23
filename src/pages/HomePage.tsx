@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { ArrowRight, Bike, Briefcase, CalendarCheck, Heart, Map as MapIcon, MapPinned, Navigation, Plane, Star, Truck } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
 import { AuthModal } from '../components/AuthModal';
+import { PricingCards } from '../components/PricingCards';
 
 const FEATURES = [
   { Icon: Navigation, color: 'text-blue-600', title: 'Optimisation intelligente', text: "Évitez les détours : jusqu'à 23 arrêts réordonnés pour le trajet le plus court en temps ou en distance." },
@@ -32,15 +33,20 @@ export default function HomePage() {
   const user = useAuthStore((s) => s.user);
   const navigate = useNavigate();
   const [showAuth, setShowAuth] = useState(false);
+  const [destination, setDestination] = useState('/app');
 
-  const start = () => (user ? navigate('/app') : setShowAuth(true));
+  const start = (to = '/app') => {
+    setDestination(to);
+    if (user) navigate(to);
+    else setShowAuth(true);
+  };
 
   return (
     <div className="min-h-full bg-white text-gray-900">
       <header className="sticky top-0 z-20 border-b border-gray-100 bg-white/90 backdrop-blur">
         <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-3">
           <div className="flex items-center gap-2 text-xl font-bold text-gray-900"><Navigation className="h-7 w-7 fill-blue-600 text-blue-600" /><span>Navi<span className="text-blue-600">mizer</span></span></div>
-          <button onClick={start} className="flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700">Accéder à l'application <ArrowRight className="h-4 w-4" /></button>
+          <button onClick={() => start()} className="flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700">Accéder à l'application <ArrowRight className="h-4 w-4" /></button>
         </div>
       </header>
 
@@ -51,7 +57,7 @@ export default function HomePage() {
         <div className="mx-auto max-w-6xl px-4 py-20 text-center md:py-28">
           <h1 className="mx-auto max-w-3xl text-4xl font-bold leading-tight text-gray-900 md:text-5xl">L'optimisation de trajets, simple et efficace <span aria-hidden>🚀</span></h1>
           <p className="mx-auto mt-5 max-w-2xl text-lg text-gray-600">Évitez les détours inutiles, optimisez chaque itinéraire.<br />Que vous soyez livreur, commercial ou simple voyageur.</p>
-          <button onClick={start} className="mt-8 inline-flex items-center gap-2 rounded-lg bg-blue-600 px-7 py-3.5 font-semibold text-white shadow-lg hover:bg-blue-700">Commencer maintenant <ArrowRight className="h-5 w-5" /></button>
+          <button onClick={() => start()} className="mt-8 inline-flex items-center gap-2 rounded-lg bg-blue-600 px-7 py-3.5 font-semibold text-white shadow-lg hover:bg-blue-700">Commencer maintenant <ArrowRight className="h-5 w-5" /></button>
         </div>
       </section>
 
@@ -83,6 +89,14 @@ export default function HomePage() {
         </div>
       </section>
 
+      <section id="tarifs" className="bg-gray-50 py-16">
+        <div className="mx-auto max-w-3xl px-4">
+          <h2 className="mb-2 text-center text-2xl font-bold">Des tarifs simples</h2>
+          <p className="mb-10 text-center text-gray-600">Commencez gratuitement, passez Pro quand vos tournées grandissent.</p>
+          <PricingCards onFree={() => start()} onPro={() => start('/app?upgrade=1')} />
+        </div>
+      </section>
+
       <section className="mx-auto max-w-6xl px-4 py-16">
         <h2 className="mb-10 text-center text-2xl font-bold">Ils optimisent leurs trajets</h2>
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
@@ -103,7 +117,7 @@ export default function HomePage() {
 
       <section className="bg-blue-600 py-16 text-center text-white">
         <h2 className="text-2xl font-bold">Prêt à gagner du temps sur chaque trajet ?</h2>
-        <button onClick={start} className="mt-6 inline-flex items-center gap-2 rounded-lg bg-white px-6 py-3 font-semibold text-blue-700 shadow-lg hover:bg-blue-50">Commencer maintenant <ArrowRight className="h-5 w-5" /></button>
+        <button onClick={() => start()} className="mt-6 inline-flex items-center gap-2 rounded-lg bg-white px-6 py-3 font-semibold text-blue-700 shadow-lg hover:bg-blue-50">Commencer maintenant <ArrowRight className="h-5 w-5" /></button>
       </section>
 
       <footer className="bg-gray-900 text-gray-300">
@@ -117,7 +131,7 @@ export default function HomePage() {
         <div className="border-t border-gray-800 py-4 text-center text-xs"><Bike className="mr-1 inline h-3 w-3" />© {new Date().getFullYear()} Navimizer</div>
       </footer>
 
-      {showAuth && <AuthModal onClose={() => setShowAuth(false)} onSuccess={() => navigate('/app')} />}
+      {showAuth && <AuthModal onClose={() => setShowAuth(false)} onSuccess={() => navigate(destination)} />}
     </div>
   );
 }

@@ -3,6 +3,8 @@
 // Secrets optionnels (serveurs OSRM dédiés) : OSRM_URL_CAR, OSRM_URL_BIKE, OSRM_URL_FOOT
 // Le JWT de l'utilisateur est vérifié par Supabase (verify_jwt activé par défaut).
 
+import { createClient } from 'npm:@supabase/supabase-js@2';
+import { FREE_MAX_POINTS } from '../_shared/billing.ts';
 import { optimizeRoute, OptimizeError, PUBLIC_SERVERS, validateRequest } from '../_shared/optimize.ts';
 
 const cors = {
@@ -26,6 +28,20 @@ Deno.serve(async (req) => {
 
   try {
     const body = validateRequest(await req.json().catch(() => null));
+
+    // Plan gratuit : FREE_MAX_POINTS arrêts maximum (la limite de l'interface n'est qu'un confort, celle-ci fait foi)
+    if (body.points.length > FREE_MAX_POINTS) {
+      const supabase = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_ANON_KEY')!, {
+        global: { headers: { Authorization: req.headers.get('Authorization') ?? '' } },
+      });
+      const { data: pro, error } = await supabase.rpc('is_pro');
+      if (error) {
+        console.error(error);
+        return json({ code: 'upstream', message: 'Vérification du plan impossible' }, 500);
+      }
+      if (!pro) return json({ code: 'plan_limit', message: `Le plan gratuit est limité à ${FREE_MAX_POINTS} arrêts` }, 403);
+    }
+
     return json(await optimizeRoute(body, servers, req.signal));
   } catch (e) {
     if (e instanceof OptimizeError) {

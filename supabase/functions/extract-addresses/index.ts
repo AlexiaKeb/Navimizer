@@ -45,10 +45,18 @@ Deno.serve(async (req) => {
     if ((image!.data as string).length > MAX_IMAGE_B64) return json({ code: 'too_big', message: 'Image trop lourde' }, 413);
   }
 
-  // --- Quota par utilisateur (échec = refus : on ne laisse jamais passer sans décompte)
   const supabase = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_ANON_KEY')!, {
     global: { headers: { Authorization: req.headers.get('Authorization') ?? '' } },
   });
+  // --- Fonctionnalité Pro : l'analyse IA a un coût, on la réserve aux abonnés (vérifié côté serveur)
+  const { data: pro, error: proError } = await supabase.rpc('is_pro');
+  if (proError) {
+    console.error(proError);
+    return json({ code: 'upstream', message: 'Vérification du plan impossible' }, 500);
+  }
+  if (!pro) return json({ code: 'pro_required', message: "L'analyse intelligente est réservée au plan Pro" }, 402);
+
+  // --- Quota par utilisateur (échec = refus : on ne laisse jamais passer sans décompte)
   const limit = Number(Deno.env.get('AI_DAILY_LIMIT') ?? 30);
   const { data: allowed, error: quotaError } = await supabase.rpc('consume_ai_quota', { p_limit: limit });
   if (quotaError) {

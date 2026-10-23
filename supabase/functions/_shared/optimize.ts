@@ -5,7 +5,7 @@ import { solveOrder } from './solver.ts';
 import { MAX_POINTS } from './types.ts';
 import type { Comparison, Leg, Mode, OptimizeRequest, Point, RouteResult, Stop } from './types.ts';
 
-export type OptimizeErrorCode = 'invalid' | 'no_route' | 'upstream';
+export type OptimizeErrorCode = 'invalid' | 'no_route' | 'upstream' | 'plan_limit';
 
 export class OptimizeError extends Error {
   constructor(public code: OptimizeErrorCode, message?: string) {
