@@ -42,6 +42,7 @@ Base de données : appliquer `supabase/migrations/001_routes.sql`. Désactiver l
 | `001_routes.sql` | itinéraires sauvegardés (RLS : chacun ses données) |
 | `002_ai_quota.sql` | quota quotidien d'analyses IA par utilisateur |
 | `003_shared_routes.sql` | tournées partagées par lien (lecture publique uniquement via le jeton) |
+| `004_rls_initplan.sql` | optimisation des règles de sécurité (évaluation unique de `auth.uid()`) |
 
 ## Fonctions serveur (Supabase Edge Functions)
 
