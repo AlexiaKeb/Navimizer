@@ -6,6 +6,7 @@ import { ensureCoords, GeocodeError } from '../lib/geocode';
 import { OptimizeError, requestRoute } from '../lib/routing';
 import { clearForm, loadForm, saveForm } from '../lib/formStorage';
 import { nextQuarter } from '../lib/schedule';
+import { computeSavings, type Savings } from '../lib/savings';
 
 interface ComputeOptions {
   /** false : garder l'ordre de la liste et recalculer uniquement le tracé. */
@@ -23,6 +24,10 @@ interface RouteState {
   result: RouteResult | null;
   /** true dès que la liste a changé depuis le dernier calcul : les heures d'arrivée ne sont plus fiables. */
   stale: boolean;
+  /** Gains de la dernière optimisation par rapport à l'ordre saisi. */
+  savings: Savings | null;
+  /** Ordre saisi par l'utilisateur (ids), référence de comparaison pour les économies. */
+  inputOrder: string[];
   loading: boolean;
   mapSignal: number;
   visits: Record<string, Visit>;
@@ -113,6 +118,8 @@ export const useRouteStore = create<RouteState>((set, get) => {
     serviceMin: restored?.serviceMin ?? 5,
     result: null,
     stale: false,
+    savings: null,
+    inputOrder: [],
     loading: false,
     mapSignal: 0,
     visits: restored?.visits ?? {},
@@ -181,7 +188,7 @@ export const useRouteStore = create<RouteState>((set, get) => {
     reset: () => {
       requestId++;
       clearForm();
-      set({ stops: blankList(), result: null, stale: false, loading: false, mode: 'car', optimization: 'time', visits: {}, driver: false });
+      set({ stops: blankList(), result: null, stale: false, savings: null, inputOrder: [], loading: false, mode: 'car', optimization: 'time', visits: {}, driver: false });
     },
 
     load: ({ origin, destination, waypoints, mode }) => {
@@ -214,19 +221,27 @@ export const useRouteStore = create<RouteState>((set, get) => {
         if (id !== requestId) return;
         if (!rows) return void set({ loading: false });
 
-        const { mode, optimization } = get();
+        const { mode, optimization, stale, result: previous, inputOrder } = get();
+        // Mode ou critère modifié sans toucher à la liste : on repart de l'ordre saisi pour comparer ce qui est comparable.
+        const reuse =
+          optimize && !stale && previous && inputOrder.length === rows.length && rows.every((r) => inputOrder.includes(r.id));
+        const planned = reuse ? inputOrder.map((id) => rows.find((r) => r.id === id)!) : rows;
+
         const result = await requestRoute({
-          points: rows.map((r) => ({ label: r.label, lat: r.lat!, lon: r.lon! })),
+          points: planned.map((r) => ({ label: r.label, lat: r.lat!, lon: r.lon! })),
           mode,
           optimization,
           optimize,
         });
         if (id !== requestId) return;
+        const ordered = result.order.map((i) => planned[i]);
         set((s) => ({
           // La liste prend l'ordre de passage calculé : c'est la tournée.
-          stops: result.order.map((i) => rows[i]),
+          stops: ordered,
           result,
           stale: false,
+          savings: optimize && result.comparison ? computeSavings(result.comparison, mode) : null,
+          inputOrder: optimize ? planned.map((r) => r.id) : ordered.map((r) => r.id),
           loading: false,
           mapSignal: showMap ? s.mapSignal + 1 : s.mapSignal,
         }));

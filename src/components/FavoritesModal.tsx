@@ -3,6 +3,7 @@ import { Pencil, Plus, Star, Trash2, X } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useFavoritesStore, type Favorite } from '../store/favoritesStore';
 import { AddressInput } from './AddressInput';
+import { useEscape } from '../lib/useEscape';
 import type { Place } from '../types';
 
 interface Props {
@@ -11,6 +12,7 @@ interface Props {
 }
 
 export function FavoritesModal({ onSelect, onClose }: Props) {
+  useEscape(onClose);
   const { favorites, add, update, remove } = useFavoritesStore();
   const [editing, setEditing] = useState<Favorite | 'new' | null>(null);
   const [name, setName] = useState('');

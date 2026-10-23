@@ -7,7 +7,7 @@ import { useRouteStore } from '../store/routeStore';
 import { RoutePanel } from './RoutePanel';
 import { HistoryPanel } from './HistoryPanel';
 import { MapView } from './MapView';
-import { DriverMode } from './DriverMode';
+import { DriverModeFromStore } from './DriverMode';
 
 export default function AppLayout() {
   const { user, loading, signOut } = useAuthStore();
@@ -63,7 +63,7 @@ export default function AppLayout() {
           <MapView visible={mobileView === 'map'} />
         </main>
       </div>
-      {driver && <DriverMode />}
+      {driver && <DriverModeFromStore />}
     </div>
   );
 }

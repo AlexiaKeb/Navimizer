@@ -5,7 +5,7 @@ import 'leaflet/dist/leaflet.css';
 import { ExternalLink, LocateFixed, Navigation, Home } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useRouteStore } from '../store/routeStore';
-import { googleMapsUrl, wazeUrl } from '../lib/navLinks';
+import { GOOGLE_MAPS_MAX_POINTS, googleMapsUrl, wazeUrl } from '../lib/navLinks';
 
 const PARIS: [number, number] = [48.8566, 2.3522];
 
@@ -91,9 +91,9 @@ export function MapView({ visible }: { visible: boolean }) {
         {result && (
           <div className="relative">
             {navOpen && (
-              <div className="absolute bottom-full right-0 mb-2 w-44 overflow-hidden rounded-lg bg-white shadow-lg">
-                <a href={googleMapsUrl(result.stops, useRouteStore.getState().mode)} target="_blank" rel="noopener noreferrer" className="flex items-center justify-between px-3 py-2.5 text-sm hover:bg-gray-50">Google Maps <ExternalLink className="h-3.5 w-3.5" /></a>
-                <a href={wazeUrl(result.stops)} target="_blank" rel="noopener noreferrer" className="flex items-center justify-between px-3 py-2.5 text-sm hover:bg-gray-50">Waze <ExternalLink className="h-3.5 w-3.5" /></a>
+              <div className="absolute bottom-full right-0 mb-2 w-52 overflow-hidden rounded-lg bg-white shadow-lg">
+                <a href={googleMapsUrl(result.stops, useRouteStore.getState().mode)} target="_blank" rel="noopener noreferrer" className="flex items-center justify-between px-3 py-2.5 text-sm hover:bg-gray-50">{result.stops.length > GOOGLE_MAPS_MAX_POINTS ? `Google Maps (${GOOGLE_MAPS_MAX_POINTS} premiers)` : 'Google Maps'} <ExternalLink className="h-3.5 w-3.5" /></a>
+                <a href={wazeUrl(result.stops)} target="_blank" rel="noopener noreferrer" className="flex items-center justify-between px-3 py-2.5 text-sm hover:bg-gray-50">Waze (arrivée) <ExternalLink className="h-3.5 w-3.5" /></a>
               </div>
             )}
             <button onClick={() => setNavOpen((o) => !o)} aria-label="Navigation" className="rounded-full bg-blue-600 p-3 text-white shadow-lg hover:bg-blue-700"><Navigation className="h-5 w-5" /></button>

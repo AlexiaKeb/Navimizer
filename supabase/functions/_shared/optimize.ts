@@ -3,7 +3,7 @@
 
 import { solveOrder } from './solver.ts';
 import { MAX_POINTS } from './types.ts';
-import type { Leg, Mode, OptimizeRequest, Point, RouteResult, Stop } from './types.ts';
+import type { Comparison, Leg, Mode, OptimizeRequest, Point, RouteResult, Stop } from './types.ts';
 
 export type OptimizeErrorCode = 'invalid' | 'no_route' | 'upstream';
 
@@ -90,6 +90,7 @@ export async function optimizeRoute(
   const n = points.length;
 
   let order = Array.from({ length: n }, (_, i) => i);
+  let comparison: Comparison | undefined;
   if (n > 2 && optimize !== false) {
     const table = await getJson<{ durations: (number | null)[][]; distances: (number | null)[][] }>(
       `${base}/table/v1/${PROFILE}/${coordPath(points)}?annotations=duration,distance`,
@@ -99,6 +100,24 @@ export async function optimizeRoute(
     // Un trajet impossible (null) est rendu prohibitif plutôt qu'ignoré
     const cost = raw.map((row) => row.map((v) => (v === null ? 1e9 : v)));
     order = solveOrder(cost);
+
+    // Coût de l'ordre saisi vs ordre optimisé, sur les mêmes matrices
+    const identity = Array.from({ length: n }, (_, i) => i);
+    const pathSum = (m: (number | null)[][], path: number[]) => {
+      let t = 0;
+      for (let i = 1; i < path.length; i++) {
+        const v = m[path[i - 1]]?.[path[i]];
+        if (v === null || v === undefined) return null;
+        t += v;
+      }
+      return t;
+    };
+    const [bd, bt, od, ot] = [
+      pathSum(table.distances, identity), pathSum(table.durations, identity),
+      pathSum(table.distances, order), pathSum(table.durations, order),
+    ];
+    if (bd !== null && bt !== null && od !== null && ot !== null)
+      comparison = { baselineDistance: bd, baselineDuration: bt, optimizedDistance: od, optimizedDuration: ot };
   }
 
   const ordered = order.map((i) => points[i]);
@@ -118,5 +137,6 @@ export async function optimizeRoute(
     distance: r.distance,
     duration: r.duration,
     geometry: r.geometry.coordinates.map(([lon, lat]) => [lat, lon]),
+    comparison,
   };
 }

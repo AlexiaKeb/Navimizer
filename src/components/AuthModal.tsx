@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Loader2, X } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useAuthStore } from '../store/authStore';
+import { useEscape } from '../lib/useEscape';
 
 interface Props {
   onClose: () => void;
@@ -9,6 +10,7 @@ interface Props {
 }
 
 export function AuthModal({ onClose, onSuccess }: Props) {
+  useEscape(onClose);
   const { signIn, signUp } = useAuthStore();
   const [mode, setMode] = useState<'login' | 'signup'>('login');
   const [email, setEmail] = useState('');

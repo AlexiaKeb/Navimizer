@@ -22,8 +22,14 @@ export function HistoryPanel({ onLoaded }: { onLoaded: () => void }) {
 
   useEffect(() => {
     void fetchRoutes();
-    const id = setInterval(() => void fetchRoutes(), 30_000);
-    return () => clearInterval(id);
+    // Rafraîchissement toutes les 30 s, uniquement quand la page est visible (économise batterie et requêtes)
+    const id = setInterval(() => document.visibilityState === 'visible' && void fetchRoutes(), 30_000);
+    const onVisible = () => document.visibilityState === 'visible' && void fetchRoutes();
+    document.addEventListener('visibilitychange', onVisible);
+    return () => {
+      clearInterval(id);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
   }, [fetchRoutes]);
 
   const rename = async (id: string) => {

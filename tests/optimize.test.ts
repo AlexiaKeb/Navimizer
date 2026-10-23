@@ -60,6 +60,21 @@ describe('optimizeRoute', () => {
     expect(res.order).toEqual([0, 2, 3, 1, 4]); // indices d'origine dans l'ordre de passage
   });
 
+  it("chiffre le gain par rapport à l'ordre saisi (comparison)", async () => {
+    const shuffled = [P(0, 'dep'), P(0.3, 'c'), P(0.1, 'a'), P(0.2, 'b'), P(0.4, 'arr')];
+    const bad = await optimizeRoute({ points: shuffled, mode: 'car', optimization: 'distance' }, servers());
+    // saisi : 0 -> .3 -> .1 -> .2 -> .4 = .3+.2+.1+.2 = 0.8° ; optimisé : 0.4°
+    expect(bad.comparison!.baselineDistance).toBeCloseTo(0.8 * 100_000, 0);
+    expect(bad.comparison!.optimizedDistance).toBeCloseTo(0.4 * 100_000, 0);
+
+    const sorted = [P(0, 'dep'), P(0.1, 'a'), P(0.2, 'b'), P(0.4, 'arr')];
+    const ok = await optimizeRoute({ points: sorted, mode: 'car', optimization: 'time' }, servers());
+    expect(ok.comparison!.baselineDistance).toBeCloseTo(ok.comparison!.optimizedDistance, 3);
+
+    const manual = await optimizeRoute({ points: shuffled, mode: 'car', optimization: 'time', optimize: false }, servers());
+    expect(manual.comparison).toBeUndefined();
+  });
+
   it("conserve l'ordre fourni avec optimize: false (sans appel à /table)", async () => {
     tableCalls = 0;
     const points = [P(0, 'dep'), P(0.3, 'c'), P(0.1, 'a'), P(0.4, 'arr')];

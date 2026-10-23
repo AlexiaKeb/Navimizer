@@ -5,6 +5,7 @@ import { useAuthStore } from './store/authStore';
 
 const HomePage = lazy(() => import('./pages/HomePage'));
 const AppLayout = lazy(() => import('./components/AppLayout'));
+const TourPage = lazy(() => import('./pages/TourPage'));
 
 export default function App() {
   const init = useAuthStore((s) => s.init);
@@ -17,6 +18,7 @@ export default function App() {
         <Routes>
           <Route path="/" element={<HomePage />} />
           <Route path="/app" element={<AppLayout />} />
+          <Route path="/t/:token" element={<TourPage />} />
           <Route path="*" element={<HomePage />} />
         </Routes>
       </Suspense>

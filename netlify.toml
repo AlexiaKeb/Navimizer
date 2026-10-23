@@ -6,3 +6,5 @@
   from = "/*"
   to = "/index.html"
   status = 200
+
+# Les en-têtes de sécurité sont définis dans public/_headers (lu aussi par Netlify).

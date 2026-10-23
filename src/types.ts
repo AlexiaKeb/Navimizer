@@ -1,7 +1,7 @@
 import { MAX_POINTS } from '../supabase/functions/_shared/types.ts';
 import type { Mode } from '../supabase/functions/_shared/types.ts';
 
-export type { Leg, Mode, OptimizeRequest, Optimization, Point, RouteResult, Stop } from '../supabase/functions/_shared/types.ts';
+export type { Comparison, Leg, Mode, OptimizeRequest, Optimization, Point, RouteResult, Stop } from '../supabase/functions/_shared/types.ts';
 
 export interface Place {
   label: string;

@@ -18,6 +18,14 @@ export interface Leg {
   duration: number; // s
 }
 
+/** Coût de l'ordre saisi comparé à l'ordre optimisé (mêmes matrices OSRM, donc comparables). */
+export interface Comparison {
+  baselineDistance: number; // m
+  baselineDuration: number; // s
+  optimizedDistance: number;
+  optimizedDuration: number;
+}
+
 export interface RouteResult {
   order: number[]; // indices d'origine (dans la requête) des arrêts, dans l'ordre de passage
   stops: Stop[]; // dans l'ordre de passage
@@ -25,6 +33,8 @@ export interface RouteResult {
   distance: number;
   duration: number;
   geometry: [number, number][]; // [lat, lon]
+  /** Présent seulement quand une optimisation a eu lieu. */
+  comparison?: Comparison;
 }
 
 export interface OptimizeRequest {

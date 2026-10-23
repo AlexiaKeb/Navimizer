@@ -1,28 +1,42 @@
 import { Check, ChevronLeft, ExternalLink, PartyPopper, X } from 'lucide-react';
+import type { Leg, Mode, Visit } from '../types';
 import { useRouteStore } from '../store/routeStore';
 import { buildSchedule, formatClock, parseClock } from '../lib/schedule';
 import { formatDistance, formatDuration } from '../lib/format';
 import { googleMapsToStop, wazeToStop } from '../lib/navLinks';
 
-/** Mode chauffeur : un arrêt à la fois, plein écran, pensé pour le mobile. */
-export function DriverMode() {
-  const { stops, result, stale, mode, visits, setVisit, setDriver, departAt, serviceMin } = useRouteStore();
-  if (!result || result.stops.length !== stops.length) return null;
+export interface DriverStop {
+  id: string;
+  label: string;
+  lat: number;
+  lon: number;
+}
 
-  const total = stops.length - 1; // le départ n'est pas une visite
+interface Props {
+  stops: DriverStop[]; // le premier est le départ (pas une visite)
+  legs: Leg[];
+  arrive: number[]; // heure d'arrivée à chaque arrêt (secondes depuis minuit)
+  mode: Mode;
+  visits: Record<string, Visit>;
+  onVisit: (id: string, v: Visit | undefined) => void;
+  onClose: () => void;
+  stale?: boolean;
+}
+
+/** Mode chauffeur : un arrêt à la fois, plein écran, pensé pour le mobile. */
+export function DriverMode({ stops, legs, arrive, mode, visits, onVisit, onClose, stale }: Props) {
+  const total = stops.length - 1;
   const doneCount = stops.slice(1).filter((s) => visits[s.id]).length;
   const current = stops.findIndex((s, i) => i > 0 && !visits[s.id]);
   const finished = current === -1;
-  const schedule = buildSchedule(result.legs, parseClock(departAt), serviceMin * 60);
   const failed = stops.slice(1).filter((s) => visits[s.id] === 'failed').length;
-
-  const stop = finished ? null : result.stops[current];
-  const leg = finished ? null : result.legs[current - 1];
+  const stop = finished ? null : stops[current];
+  const leg = finished ? null : legs[current - 1];
 
   return (
     <div className="fixed inset-0 z-[4000] flex flex-col bg-white" role="dialog" aria-modal="true" aria-label="Mode chauffeur">
       <header className="flex items-center justify-between border-b border-gray-200 px-4 py-3">
-        <button onClick={() => setDriver(false)} className="flex items-center gap-1 text-sm text-gray-700"><ChevronLeft className="h-5 w-5" /> Quitter</button>
+        <button onClick={onClose} className="flex items-center gap-1 text-sm text-gray-700"><ChevronLeft className="h-5 w-5" /> Quitter</button>
         <span className="text-sm font-semibold">{doneCount}/{total} arrêts</span>
       </header>
       <div className="h-1.5 bg-gray-100"><div className="h-full bg-green-600 transition-all" style={{ width: `${(doneCount / total) * 100}%` }} /></div>
@@ -35,7 +49,7 @@ export function DriverMode() {
             <PartyPopper className="h-14 w-14 text-green-600" />
             <h2 className="text-2xl font-bold">Tournée terminée</h2>
             <p className="text-gray-600">{total - failed} livré{total - failed > 1 ? 's' : ''}{failed > 0 && ` · ${failed} en échec`}</p>
-            <button onClick={() => setDriver(false)} className="mt-2 rounded-lg bg-blue-600 px-6 py-3 font-semibold text-white">Fermer</button>
+            <button onClick={onClose} className="mt-2 rounded-lg bg-blue-600 px-6 py-3 font-semibold text-white">Fermer</button>
           </div>
         ) : (
           <>
@@ -46,7 +60,7 @@ export function DriverMode() {
               </div>
               <p className="text-xl font-semibold leading-snug">{stop!.label}</p>
               <p className="mt-2 text-sm text-gray-600">
-                Arrivée prévue <strong>{formatClock(schedule.arrive[current])}</strong>
+                Arrivée prévue <strong>{formatClock(arrive[current])}</strong>
                 {leg && <> · {formatDistance(leg.distance)} · {formatDuration(leg.duration)}</>}
               </p>
             </section>
@@ -57,8 +71,8 @@ export function DriverMode() {
             </div>
 
             <div className="grid grid-cols-2 gap-3">
-              <button onClick={() => setVisit(stops[current].id, 'failed')} className="flex items-center justify-center gap-2 rounded-lg bg-red-600 py-4 text-base font-semibold text-white"><X className="h-5 w-5" /> Échec</button>
-              <button onClick={() => setVisit(stops[current].id, 'done')} className="flex items-center justify-center gap-2 rounded-lg bg-green-600 py-4 text-base font-semibold text-white"><Check className="h-5 w-5" /> Livré</button>
+              <button onClick={() => onVisit(stops[current].id, 'failed')} className="flex items-center justify-center gap-2 rounded-lg bg-red-600 py-4 text-base font-semibold text-white"><X className="h-5 w-5" /> Échec</button>
+              <button onClick={() => onVisit(stops[current].id, 'done')} className="flex items-center justify-center gap-2 rounded-lg bg-green-600 py-4 text-base font-semibold text-white"><Check className="h-5 w-5" /> Livré</button>
             </div>
           </>
         )}
@@ -74,9 +88,9 @@ export function DriverMode() {
                   <span className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-bold text-white ${v === 'done' ? 'bg-green-600' : v === 'failed' ? 'bg-red-600' : 'bg-slate-500'}`}>
                     {v === 'done' ? '✓' : v === 'failed' ? '✗' : i === stops.length - 1 ? 'A' : i}
                   </span>
-                  <span className="min-w-0 flex-1 truncate">{result.stops[i].label}</span>
-                  <span className="text-xs text-gray-500">{formatClock(schedule.arrive[i])}</span>
-                  {v && <button onClick={() => setVisit(s.id, undefined)} className="text-xs text-blue-600 underline">Annuler</button>}
+                  <span className="min-w-0 flex-1 truncate">{s.label}</span>
+                  <span className="text-xs text-gray-500">{formatClock(arrive[i])}</span>
+                  {v && <button onClick={() => onVisit(s.id, undefined)} className="text-xs text-blue-600 underline">Annuler</button>}
                 </li>
               );
             })}
@@ -84,5 +98,24 @@ export function DriverMode() {
         </section>
       </main>
     </div>
+  );
+}
+
+/** Version connectée au store de l'application. */
+export function DriverModeFromStore() {
+  const { stops, result, stale, mode, visits, setVisit, setDriver, departAt, serviceMin } = useRouteStore();
+  if (!result || result.legs.length !== stops.length - 1 || stops.some((s) => s.lat === undefined)) return null;
+  const schedule = buildSchedule(result.legs, parseClock(departAt), serviceMin * 60);
+  return (
+    <DriverMode
+      stops={stops.map((s) => ({ id: s.id, label: s.label, lat: s.lat!, lon: s.lon! }))}
+      legs={result.legs}
+      arrive={schedule.arrive}
+      mode={mode}
+      visits={visits}
+      onVisit={setVisit}
+      onClose={() => setDriver(false)}
+      stale={stale}
+    />
   );
 }

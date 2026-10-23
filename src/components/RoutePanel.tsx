@@ -1,15 +1,18 @@
 import { useState } from 'react';
-import { ArrowUpDown, Bike, Car, Footprints, Loader2, Navigation, Plus, RotateCcw, Ruler, Save, Zap } from 'lucide-react';
+import { ArrowUpDown, Bike, Car, Footprints, Loader2, Navigation, Plus, RotateCcw, Ruler, Save, Share2, Sparkles, Zap } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useRouteStore } from '../store/routeStore';
 import { useAuthStore } from '../store/authStore';
 import { supabase } from '../lib/supabase';
 import { formatDistance, formatDuration } from '../lib/format';
 import { buildSchedule, formatClock, parseClock } from '../lib/schedule';
+import { buildTour, createShareLink } from '../lib/share';
 import { MAX_POINTS, type Mode, type Optimization } from '../types';
 import { CsvImport } from './CsvImport';
 import { FavoritesModal } from './FavoritesModal';
 import { StopList } from './StopList';
+import { SavingsCard } from './SavingsCard';
+import { PasteImport } from './PasteImport';
 
 const MODES: { id: Mode; label: string; Icon: typeof Car }[] = [
   { id: 'car', label: 'Voiture', Icon: Car },
@@ -31,6 +34,8 @@ export function RoutePanel() {
   const [saving, setSaving] = useState(false);
   const [routeName, setRouteName] = useState('');
   const [showSave, setShowSave] = useState(false);
+  const [pasteOpen, setPasteOpen] = useState(false);
+  const [sharing, setSharing] = useState(false);
 
   const filled = s.stops.filter((r) => r.label.trim()).length;
   const schedule = s.result && !s.stale && s.result.legs.length === s.stops.length - 1
@@ -60,6 +65,32 @@ export function RoutePanel() {
     setShowSave(false);
   };
 
+  const share = async () => {
+    if (!user || !s.result || s.stale) return toast.error("Optimisez d'abord la tournée pour la partager");
+    setSharing(true);
+    try {
+      const url = await createShareLink(user.id, buildTour(s.result, s.mode, s.departAt, s.serviceMin));
+      if (navigator.share) {
+        try {
+          await navigator.share({ title: 'Tournée Navimizer', text: 'Ma tournée', url });
+          return;
+        } catch (e) {
+          if ((e as Error).name === 'AbortError') return;
+        }
+      }
+      try {
+        await navigator.clipboard.writeText(url);
+        toast.success('Lien copié — valable 30 jours');
+      } catch {
+        window.prompt('Copiez ce lien (valable 30 jours) :', url);
+      }
+    } catch {
+      toast.error('Impossible de créer le lien de partage');
+    } finally {
+      setSharing(false);
+    }
+  };
+
   const pick = (address: string) => {
     const row = favFor === 'first' ? s.stops[0] : s.stops[s.stops.length - 1];
     s.updateStop(row.id, { label: address });
@@ -68,6 +99,44 @@ export function RoutePanel() {
   return (
     <div className="flex min-h-full flex-col">
       <div className="flex-1 space-y-4 p-4">
+        {/* Résultat */}
+        {s.result && (
+          <section className={`space-y-3 rounded-lg border p-3 ${s.stale ? 'border-yellow-300 bg-yellow-50' : 'border-gray-200 bg-gray-50'}`}>
+            {s.stale && <p className="text-xs text-yellow-800">La liste a changé : relancez l'optimisation pour mettre à jour les heures d'arrivée.</p>}
+            <SavingsCard />
+            <div className="grid grid-cols-3 gap-2 text-center">
+              <div className="rounded-lg bg-white p-2 shadow-sm"><div className="text-[11px] text-gray-500">Distance</div><div className="text-sm font-semibold">{formatDistance(s.result.distance)}</div></div>
+              <div className="rounded-lg bg-white p-2 shadow-sm"><div className="text-[11px] text-gray-500">Conduite</div><div className="text-sm font-semibold">{formatDuration(s.result.duration)}</div></div>
+              <div className="rounded-lg bg-white p-2 shadow-sm"><div className="text-[11px] text-gray-500">Fin estimée</div><div className="text-sm font-semibold">{schedule ? formatClock(schedule.end) : '—'}</div></div>
+            </div>
+            <button onClick={() => s.setDriver(true)} className="flex w-full items-center justify-center gap-2 rounded-lg bg-green-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-green-700">
+              <Navigation className="h-4 w-4" /> Démarrer la tournée (mode chauffeur)
+            </button>
+            {user && (
+              <div>
+                <button onClick={() => void share()} disabled={sharing || s.stale}
+                  className="flex w-full items-center justify-center gap-2 rounded-lg border border-green-600 px-4 py-2.5 text-sm font-medium text-green-700 hover:bg-green-50 disabled:opacity-60">
+                  {sharing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Share2 className="h-4 w-4" />} Partager la tournée (lien)
+                </button>
+                <p className="mt-1 text-[11px] text-gray-500">Le chauffeur l'ouvre sans compte. Valable 30 jours : toute personne ayant le lien voit les adresses.</p>
+              </div>
+            )}
+            {user && (showSave ? (
+              <div className="flex gap-2">
+                <input value={routeName} onChange={(e) => setRouteName(e.target.value)} placeholder="Ex : Tournée du lundi matin"
+                  className="min-w-0 flex-1 rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-blue-600" />
+                <button onClick={() => void save()} disabled={saving} className="flex items-center gap-2 rounded-lg bg-blue-600 px-3 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-60">
+                  {saving ? <><Loader2 className="h-4 w-4 animate-spin" /> Sauvegarde...</> : 'OK'}
+                </button>
+              </div>
+            ) : (
+              <button onClick={() => setShowSave(true)} className="flex w-full items-center justify-center gap-2 rounded-lg border border-blue-600 px-4 py-2.5 text-sm font-medium text-blue-700 hover:bg-blue-50">
+                <Save className="h-4 w-4" /> Sauvegarder
+              </button>
+            ))}
+          </section>
+        )}
+
         {/* Réglages */}
         <section className="space-y-2">
           <div className="grid grid-cols-3 gap-2" role="group" aria-label="Mode de transport">
@@ -109,43 +178,20 @@ export function RoutePanel() {
             </button>
           </div>
           <StopList onFavorites={setFavFor} />
+          <button type="button" onClick={() => s.addStop()} disabled={s.stops.length >= MAX_POINTS}
+            className="flex w-full items-center justify-center gap-1 rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 disabled:opacity-50">
+            <Plus className="h-4 w-4" /> Ajouter un arrêt
+          </button>
           <div className="grid grid-cols-2 gap-2">
-            <button type="button" onClick={() => s.addStop()} disabled={s.stops.length >= MAX_POINTS}
-              className="flex items-center justify-center gap-1 rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 disabled:opacity-50">
-              <Plus className="h-4 w-4" /> Ajouter un arrêt
+            <button type="button" onClick={() => setPasteOpen(true)}
+              className="flex items-center justify-center gap-1.5 rounded-lg border border-blue-300 bg-blue-50 px-3 py-2.5 text-sm font-medium text-blue-700 hover:bg-blue-100">
+              <Sparkles className="h-4 w-4" /> Coller / Photo
             </button>
             <CsvImport />
           </div>
           <p className="text-xs text-gray-500">Glissez ⠿ pour réordonner : le tracé est recalculé dans votre ordre. Le départ et l'arrivée restent fixes lors de l'optimisation.</p>
         </section>
 
-        {/* Résultat */}
-        {s.result && (
-          <section className={`space-y-3 rounded-lg border p-3 ${s.stale ? 'border-yellow-300 bg-yellow-50' : 'border-gray-200 bg-gray-50'}`}>
-            {s.stale && <p className="text-xs text-yellow-800">La liste a changé : relancez l'optimisation pour mettre à jour les heures d'arrivée.</p>}
-            <div className="grid grid-cols-3 gap-2 text-center">
-              <div className="rounded-lg bg-white p-2 shadow-sm"><div className="text-[11px] text-gray-500">Distance</div><div className="text-sm font-semibold">{formatDistance(s.result.distance)}</div></div>
-              <div className="rounded-lg bg-white p-2 shadow-sm"><div className="text-[11px] text-gray-500">Conduite</div><div className="text-sm font-semibold">{formatDuration(s.result.duration)}</div></div>
-              <div className="rounded-lg bg-white p-2 shadow-sm"><div className="text-[11px] text-gray-500">Fin estimée</div><div className="text-sm font-semibold">{schedule ? formatClock(schedule.end) : '—'}</div></div>
-            </div>
-            <button onClick={() => s.setDriver(true)} className="flex w-full items-center justify-center gap-2 rounded-lg bg-green-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-green-700">
-              <Navigation className="h-4 w-4" /> Démarrer la tournée (mode chauffeur)
-            </button>
-            {user && (showSave ? (
-              <div className="flex gap-2">
-                <input value={routeName} onChange={(e) => setRouteName(e.target.value)} placeholder="Ex : Tournée du lundi matin"
-                  className="min-w-0 flex-1 rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-blue-600" />
-                <button onClick={() => void save()} disabled={saving} className="flex items-center gap-2 rounded-lg bg-blue-600 px-3 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-60">
-                  {saving ? <><Loader2 className="h-4 w-4 animate-spin" /> Sauvegarde...</> : 'OK'}
-                </button>
-              </div>
-            ) : (
-              <button onClick={() => setShowSave(true)} className="flex w-full items-center justify-center gap-2 rounded-lg border border-blue-600 px-4 py-2.5 text-sm font-medium text-blue-700 hover:bg-blue-50">
-                <Save className="h-4 w-4" /> Sauvegarder
-              </button>
-            ))}
-          </section>
-        )}
       </div>
 
       {/* Barre d'action toujours visible */}
@@ -159,6 +205,7 @@ export function RoutePanel() {
           className="rounded-lg border border-gray-300 px-3 text-gray-600 hover:bg-gray-50 disabled:opacity-50"><RotateCcw className="h-4 w-4" /></button>
       </div>
 
+      {pasteOpen && <PasteImport onClose={() => setPasteOpen(false)} />}
       {favFor && <FavoritesModal onClose={() => setFavFor(null)} onSelect={pick} />}
     </div>
   );
